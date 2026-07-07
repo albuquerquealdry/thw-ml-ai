@@ -1,0 +1,209 @@
+---
+# ============================================================
+# Proxmox VM Provisioning
+# Connects to the Proxmox host to create VMs via SSH
+# ============================================================
+
+- name: Download Ubuntu 22.04 cloud image on Proxmox
+  ansible.builtin.shell:
+    cmd: |
+      if [ ! -f /var/lib/vz/template/iso/{{ proxmox_cloud_image_name }} ]; then
+        wget -O /var/lib/vz/template/iso/{{ proxmox_cloud_image_name }} {{ proxmox_cloud_image_url }}
+        echo "downloaded"
+      else
+        echo "already_exists"
+      fi
+  register: image_download
+  changed_when: image_download.stdout == "downloaded"
+  when: not proxmox_skip_template | default(false)
+
+- name: Check if template VM already exists
+  ansible.builtin.shell:
+    cmd: qm list | grep -w {{ proxmox_template_vm_id }} || echo "not_found"
+  register: template_check
+  changed_when: false
+
+- name: Create the cloud-init template VM
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      # Create VM (without network - we'll set it after)
+      qm create {{ proxmox_template_vm_id }} \
+        --name "ubuntu-2204-cloud-template" \
+        --memory 2048 \
+        --cores 2
+      
+      # Add the network interface (delete default first if exists)
+      qm set {{ proxmox_template_vm_id }} --delete net0 2>/dev/null || true
+      qm set {{ proxmox_template_vm_id }} --net0 virtio,bridge={{ proxmox_bridge }}
+
+      # Import the cloud image as a disk
+      qm importdisk {{ proxmox_template_vm_id }} \
+        /var/lib/vz/template/iso/{{ proxmox_cloud_image_name }} \
+        {{ proxmox_storage }}
+
+      # Attach the disk
+      qm set {{ proxmox_template_vm_id }} \
+        --scsihw virtio-scsi-pci \
+        --scsi0 {{ proxmox_storage }}:vm-{{ proxmox_template_vm_id }}-disk-0
+
+      # Add cloud-init CDROM
+      qm set {{ proxmox_template_vm_id }} \
+        --ide2 {{ proxmox_storage }}:cloudinit
+
+      # Set boot order
+      qm set {{ proxmox_template_vm_id }} \
+        --boot c \
+        --bootdisk scsi0
+
+      # Enable QEMU guest agent
+      qm set {{ proxmox_template_vm_id }} \
+        --agent enabled=1
+
+      # Convert to template
+      qm template {{ proxmox_template_vm_id }}
+
+      echo "template_created"
+  register: template_create
+  changed_when: template_create.stdout == "template_created"
+  when: template_check.stdout == "not_found"
+
+# ============================================================
+# Create Master VM
+# ============================================================
+- name: Check if master VM already exists
+  ansible.builtin.shell:
+    cmd: qm list | grep -w {{ proxmox_master_vm_id }} || echo "not_found"
+  register: master_check
+  changed_when: false
+
+- name: Clone master from template
+  ansible.builtin.shell:
+    cmd: |
+      qm clone {{ proxmox_template_vm_id }} {{ proxmox_master_vm_id }} \
+        --name "k8s-control-plane" \
+        --full 1
+
+      # Resize disk to 10GB
+      qm resize {{ proxmox_master_vm_id }} scsi0 {{ proxmox_disk_size }}
+
+      # Set memory and CPU
+      qm set {{ proxmox_master_vm_id }} \
+        --memory {{ proxmox_master_memory }} \
+        --cores {{ proxmox_master_cores }}
+
+      # Set cloud-init network config (static IP)
+      qm set {{ proxmox_master_vm_id }} \
+        --ipconfig0 ip={{ proxmox_master_ip }}/{{ proxmox_netmask }},gw={{ proxmox_gateway }}
+
+      # Set DNS
+      qm set {{ proxmox_master_vm_id }} \
+        --nameserver {{ proxmox_dns }}
+
+      # Set cloud-init user config (inline)
+      qm set {{ proxmox_master_vm_id }} \
+        --sshkey {{ proxmox_ssh_key_file }}
+
+      # Set CI user
+      qm set {{ proxmox_master_vm_id }} \
+        --ciuser root
+
+      # Start the VM
+      qm start {{ proxmox_master_vm_id }}
+
+      echo "master_created"
+  register: master_create
+  changed_when: master_create.stdout == "master_created"
+  when: master_check.stdout == "not_found"
+
+# ============================================================
+# Create Worker VM
+# ============================================================
+- name: Check if worker VM already exists
+  ansible.builtin.shell:
+    cmd: qm list | grep -w {{ proxmox_worker_vm_id }} || echo "not_found"
+  register: worker_check
+  changed_when: false
+
+- name: Clone worker from template
+  ansible.builtin.shell:
+    cmd: |
+      qm clone {{ proxmox_template_vm_id }} {{ proxmox_worker_vm_id }} \
+        --name "k8s-worker-1" \
+        --full 1
+
+      # Resize disk to 10GB
+      qm resize {{ proxmox_worker_vm_id }} scsi0 {{ proxmox_disk_size }}
+
+      # Set memory and CPU
+      qm set {{ proxmox_worker_vm_id }} \
+        --memory {{ proxmox_worker_memory }} \
+        --cores {{ proxmox_worker_cores }}
+
+      # Set cloud-init network config
+      qm set {{ proxmox_worker_vm_id }} \
+        --ipconfig0 ip={{ proxmox_worker_ip }}/{{ proxmox_netmask }},gw={{ proxmox_gateway }}
+
+      # Set DNS
+      qm set {{ proxmox_worker_vm_id }} \
+        --nameserver {{ proxmox_dns }}
+
+      # Set SSH key
+      qm set {{ proxmox_worker_vm_id }} \
+        --sshkey {{ proxmox_ssh_key_file }}
+
+      # Set CI user
+      qm set {{ proxmox_worker_vm_id }} \
+        --ciuser root
+
+      # Start the VM
+      qm start {{ proxmox_worker_vm_id }}
+
+      echo "worker_created"
+  register: worker_create
+  changed_when: worker_create.stdout == "worker_created"
+  when: worker_check.stdout == "not_found"
+
+# ============================================================
+# Wait for VMs to be ready (cloud-init takes time)
+# ============================================================
+- name: Wait for master VM to be reachable via SSH
+  ansible.builtin.wait_for:
+    host: "{{ proxmox_master_ip }}"
+    port: 22
+    delay: 15
+    timeout: 300
+  delegate_to: localhost
+
+- name: Wait for worker VM to be reachable via SSH
+  ansible.builtin.wait_for:
+    host: "{{ proxmox_worker_ip }}"
+    port: 22
+    delay: 15
+    timeout: 300
+  delegate_to: localhost
+
+- name: Give cloud-init extra time to finish
+  ansible.builtin.pause:
+    seconds: 20
+  when: master_create.changed or worker_create.changed
+
+- name: Display created VMs
+  ansible.builtin.debug:
+    msg:
+      - "======================================================"
+      - "✅ VMs created successfully!"
+      - ""
+      - "📌 Control Plane:"
+      - "   IP: {{ proxmox_master_ip }}"
+      - "   VM ID: {{ proxmox_master_vm_id }}"
+      - "   Specs: {{ proxmox_master_cores }} vCPU / {{ proxmox_master_memory }}MB RAM"
+      - ""
+      - "📌 Worker:"
+      - "   IP: {{ proxmox_worker_ip }}"
+      - "   VM ID: {{ proxmox_worker_vm_id }}"
+      - "   Specs: {{ proxmox_worker_cores }} vCPU / {{ proxmox_worker_memory }}MB RAM"
+      - ""
+      - "🔄 Next step: Run the K8s setup playbook"
+      - "   ansible-playbook -i inventory/hosts.ini site.yml --tags k8s-setup"
+      - "======================================================"

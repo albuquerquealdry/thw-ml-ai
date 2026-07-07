@@ -1,0 +1,71 @@
+---
+# ============================================================
+# Kubernetes Configuration
+# ============================================================
+
+# Kubernetes version to install
+kubernetes_version: "1.28"
+kubernetes_rpm_version: "1.28.2"
+kubernetes_deb_version: "1.28.2-1.1"
+
+# Pod network CIDR (Calico default)
+pod_network_cidr: "192.168.0.0/16"
+
+# Kubernetes API server advertise address
+apiserver_advertise_address: "{{ ansible_default_ipv4.address }}"
+
+# containerd version
+containerd_version: "1.7.11"
+
+# Calico manifest URL (compatível com K8s 1.28)
+calico_manifest_url: "https://raw.githubusercontent.com/projectcalico/calico/v3.26.4/manifests/calico.yaml"
+
+# kubeadm join command file (stored on master, fetched by workers)
+kubeadm_join_command_file: "/root/kubeadm_join_command.txt"
+
+# CRI socket for containerd
+cri_socket: "unix:///var/run/containerd/containerd.sock"
+
+# ============================================================
+# Proxmox Configuration (for VM provisioning)
+# ============================================================
+
+# Proxmox host connection
+proxmox_host: "10.0.0.50"
+proxmox_user: "root"
+proxmox_password: ""
+proxmox_ssh_key_file: "/root/.ssh/authorized_keys"
+
+# Cloud image settings
+proxmox_cloud_image_name: "ubuntu-22.04-cloudimg-amd64.img"
+proxmox_cloud_image_url: "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+
+# Template VM
+proxmox_template_vm_id: 9000
+
+# Network
+proxmox_bridge: "vmbr0"
+proxmox_netmask: "24"
+proxmox_gateway: "10.0.0.1"
+proxmox_dns: "8.8.8.8"
+
+# Storage
+proxmox_storage: "local-lvm"
+
+# Disk size (10GB)
+proxmox_disk_size: "10G"
+
+# Master VM settings
+proxmox_master_vm_id: 100
+proxmox_master_ip: "10.0.0.100"
+proxmox_master_memory: 6144
+proxmox_master_cores: 2
+
+# Worker VM settings
+proxmox_worker_vm_id: 101
+proxmox_worker_ip: "10.0.0.101"
+proxmox_worker_memory: 6144
+proxmox_worker_cores: 2
+
+# Flag to skip template creation if already exists
+proxmox_skip_template: false

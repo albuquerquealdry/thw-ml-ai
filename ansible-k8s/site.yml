@@ -1,0 +1,71 @@
+---
+# ============================================================
+# site.yml - Main Ansible Playbook for Kubernetes Cluster
+# ============================================================
+# Usage:
+#   Full setup (provision VMs + install K8s):
+#     ansible-playbook -i inventory/proxmox.ini provision.yml
+#     ansible-playbook -i inventory/hosts.ini site.yml
+#
+#   K8s only (VMs already provisioned):
+#     ansible-playbook -i inventory/hosts.ini site.yml
+#
+# This playbook will:
+#   1. Apply common prerequisites to ALL nodes (containerd, sysctl, kube*)
+#   2. Initialize the Control Plane (master) with kubeadm init
+#   3. Install Calico CNI on the master
+#   4. Join worker nodes to the cluster
+# ============================================================
+
+- name: "[PHASE 1] Apply common prerequisites to ALL nodes"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: common
+      tags:
+        - common
+        - prerequisites
+        - k8s-setup
+
+  post_tasks:
+    - name: "[PHASE 1] Common prerequisites complete for {{ inventory_hostname }}"
+      ansible.builtin.debug:
+        msg: "Node {{ inventory_hostname }} is ready for Kubernetes setup."
+
+- name: "[PHASE 2] Initialize Kubernetes Control Plane (Master)"
+  hosts: master
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: k8s-master
+      tags:
+        - master
+        - control-plane
+        - k8s-setup
+
+  post_tasks:
+    - name: "[PHASE 2] Control Plane initialization complete"
+      ansible.builtin.debug:
+        msg: "Control Plane node {{ inventory_hostname }} is now initialized."
+      tags: display
+
+- name: "[PHASE 3] Join Worker Nodes to the Cluster"
+  hosts: workers
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: k8s-worker
+      tags:
+        - workers
+        - join
+        - k8s-setup
+
+  post_tasks:
+    - name: "[PHASE 3] Worker node joining complete"
+      ansible.builtin.debug:
+        msg: "Worker node {{ inventory_hostname }} has successfully joined the cluster."
+      tags: display

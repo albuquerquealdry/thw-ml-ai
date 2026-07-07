@@ -1,0 +1,176 @@
+---
+# ============================================================
+# Common Role: Prerequisites for all Kubernetes nodes
+# ============================================================
+
+- name: Disable swap immediately
+  ansible.builtin.command:
+    cmd: swapoff -a
+  changed_when: false
+  tags: swap
+
+- name: Remove swap entries from /etc/fstab
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^([^#].*\sswap\s.*)$'
+    replace: '# \1'
+  tags: swap
+
+- name: Load kernel modules
+  ansible.builtin.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - overlay
+    - br_netfilter
+  tags: kernel
+
+- name: Ensure kernel modules are loaded on boot
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/k8s.conf
+    content: |
+      overlay
+      br_netfilter
+    mode: '0644'
+  tags: kernel
+
+- name: Configure sysctl for Kubernetes networking
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: true
+    sysctl_set: true
+  loop:
+    - { key: net.bridge.bridge-nf-call-iptables, value: '1' }
+    - { key: net.bridge.bridge-nf-call-ip6tables, value: '1' }
+    - { key: net.ipv4.ip_forward, value: '1' }
+  tags: sysctl
+
+- name: Install required system packages
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+      - software-properties-common
+    state: present
+    update_cache: true
+  when: ansible_os_family == "Debian"
+  tags: packages
+
+- name: Download Docker GPG key (for containerd)
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+  when: ansible_os_family == "Debian"
+  tags: containerd
+
+- name: Add Docker repository (for containerd)
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_facts['distribution_release'] }} stable"
+    state: present
+    update_cache: true
+  when: ansible_os_family == "Debian"
+  tags: containerd
+
+- name: Install containerd
+  ansible.builtin.apt:
+    name: containerd.io
+    state: present
+  when: ansible_os_family == "Debian"
+  tags: containerd
+
+- name: Create containerd configuration directory
+  ansible.builtin.file:
+    path: /etc/containerd
+    state: directory
+    mode: '0755'
+  tags: containerd
+
+- name: Generate default containerd config
+  ansible.builtin.shell:
+    cmd: containerd config default | grep -v "disabled_plugins" > /etc/containerd/config.toml
+  args:
+    creates: /etc/containerd/config.toml
+  tags: containerd
+
+- name: Ensure CRI plugin is not disabled (containerd v2 fix)
+  ansible.builtin.replace:
+    path: /etc/containerd/config.toml
+    regexp: 'disabled_plugins = \[\"cri\"\]\n?'
+    replace: ''
+  notify: Restart containerd
+  tags: containerd
+
+- name: Configure containerd to use systemd cgroup driver
+  ansible.builtin.replace:
+    path: /etc/containerd/config.toml
+    regexp: 'SystemdCgroup\s*=\s*false'
+    replace: 'SystemdCgroup = true'
+  notify: Restart containerd
+  tags: containerd
+
+- name: Enable and start containerd
+  ansible.builtin.systemd:
+    name: containerd
+    state: started
+    enabled: true
+    daemon_reload: true
+  tags: containerd
+
+- name: Create keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  when: ansible_os_family == "Debian"
+  tags: kubeadm
+
+- name: Download Kubernetes apt key
+  ansible.builtin.get_url:
+    url: https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/Release.key
+    dest: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+    mode: '0644'
+  when: ansible_os_family == "Debian"
+  tags: kubeadm
+
+- name: Add Kubernetes repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/ /"
+    state: present
+    update_cache: true
+  when: ansible_os_family == "Debian"
+  tags: kubeadm
+
+- name: Install kubeadm, kubelet, and kubectl
+  ansible.builtin.apt:
+    name:
+      - kubelet
+      - kubeadm
+      - kubectl
+    state: present
+  when: ansible_os_family == "Debian"
+  tags: kubeadm
+
+- name: Hold kubeadm, kubelet, and kubectl packages (prevent accidental upgrade)
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubelet
+    - kubeadm
+    - kubectl
+  when: ansible_os_family == "Debian"
+  tags: kubeadm
+
+- name: Enable and start kubelet
+  ansible.builtin.systemd:
+    name: kubelet
+    state: started
+    enabled: true
+    daemon_reload: true
+  tags: kubeadm

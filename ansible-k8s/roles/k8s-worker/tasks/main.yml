@@ -1,0 +1,63 @@
+---
+# ============================================================
+# k8s-worker Role: Join worker nodes to the cluster
+# ============================================================
+
+# -------- Check if node is already part of the cluster --------
+- name: Check if node is already part of a Kubernetes cluster
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: k8s_joined
+  tags: join
+
+# -------- Fetch the join command from the master node --------
+- name: Read the join command from the master node
+  ansible.builtin.slurp:
+    src: "{{ kubeadm_join_command_file }}"
+  register: join_command_slurp
+  delegate_to: "{{ groups['master'][0] }}"
+  run_once: true
+  when: not k8s_joined.stat.exists
+  tags: join
+
+- name: Decode the join command
+  ansible.builtin.set_fact:
+    join_command_raw: "{{ join_command_slurp.content | b64decode }}"
+  when: not k8s_joined.stat.exists
+  tags: join
+
+- name: Extract the actual kubeadm join command from the file
+  ansible.builtin.set_fact:
+    worker_join_command: "{{ join_command_raw | regex_search('kubeadm join.*') | trim }}"
+  when: not k8s_joined.stat.exists
+  tags: join
+
+# -------- Execute kubeadm join --------
+- name: Join worker node to the Kubernetes cluster
+  ansible.builtin.command:
+    cmd: "{{ worker_join_command }}"
+    timeout: 120
+  register: join_result
+  when: not k8s_joined.stat.exists
+  tags: join
+
+# -------- Display result --------
+- name: Display join result
+  ansible.builtin.debug:
+    msg:
+      - "======================================================"
+      - "Worker node {{ inventory_hostname }} joined the cluster!"
+      - "{{ join_result.stdout_lines | default([]) }}"
+      - "======================================================"
+  when: not k8s_joined.stat.exists
+  tags: join
+
+- name: Display already joined message
+  ansible.builtin.debug:
+    msg:
+      - "======================================================"
+      - "Worker node {{ inventory_hostname }} is already part of the cluster."
+      - "Skipping join process."
+      - "======================================================"
+  when: k8s_joined.stat.exists
+  tags: join

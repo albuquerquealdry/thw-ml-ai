@@ -1,0 +1,69 @@
+---
+# ============================================================
+# provision.yml - Provision VMs on Proxmox
+# ============================================================
+# Usage:
+#   ansible-playbook -i inventory/proxmox.ini provision.yml
+#
+# This playbook connects to the Proxmox host via SSH and:
+#   1. Downloads Ubuntu 22.04 cloud image (if not present)
+#   2. Creates a cloud-init template VM
+#   3. Clones template to create Master VM (control-plane)
+#   4. Clones template to create Worker VM (worker-1)
+#   5. Applies cloud-init config with static IPs
+#   6. Starts both VMs
+#   7. Waits for SSH to be available
+# ============================================================
+
+- name: "[PROXMOX] Provision Kubernetes VMs"
+  hosts: proxmox
+  gather_facts: true
+  vars:
+    ansible_ssh_pass: "{{ proxmox_password }}"
+
+  pre_tasks:
+    - name: Display provisioning information
+      ansible.builtin.debug:
+        msg:
+          - "======================================="
+          - "🚀 Starting VM Provisioning"
+          - "Proxmox Host: {{ proxmox_host }}"
+          - "Control Plane: {{ proxmox_master_ip }} ({{ proxmox_master_cores }}vCPU / {{ proxmox_master_memory }}MB)"
+          - "Worker:        {{ proxmox_worker_ip }} ({{ proxmox_worker_cores }}vCPU / {{ proxmox_worker_memory }}MB)"
+          - "Disk: {{ proxmox_disk_size }} each"
+          - "======================================="
+
+  tasks:
+    - name: Include Proxmox provisioning tasks
+      ansible.builtin.include_tasks:
+        file: proxmox/tasks/main.yml
+
+  post_tasks:
+    - name: Write inventory file for K8s setup
+      ansible.builtin.copy:
+        content: |
+          [master]
+          control-plane ansible_host={{ proxmox_master_ip }} ansible_user=root
+
+          [workers]
+          worker-1 ansible_host={{ proxmox_worker_ip }} ansible_user=root
+
+          [all:children]
+          master
+          workers
+        dest: /tmp/k8s-inventory.ini
+        mode: '0644'
+      delegate_to: localhost
+
+    - name: Reminder of next steps
+      ansible.builtin.debug:
+        msg:
+          - ""
+          - "✅ VMs provisioned and ready!"
+          - ""
+          - "Next step - Install Kubernetes:"
+          - "  ansible-playbook -i inventory/hosts.ini site.yml"
+          - ""
+          - "Or SSH directly to check:"
+          - "  ssh root@{{ proxmox_master_ip }}"
+          - "  ssh root@{{ proxmox_worker_ip }}"

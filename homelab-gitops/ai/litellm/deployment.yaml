@@ -63,8 +63,13 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 15
           resources:
+            # 1Gi de limite dava OOMKilled (exit 137) no boot: a imagem
+            # `-database` roda `prisma migrate deploy` (Node) junto com o
+            # servidor Python, e o pico de startup passa de 1Gi.
+            # 1.5Gi cobre o pico num worker de ~1.9Gi alocáveis — apertado.
+            # Com workers de 4GB dá pra voltar o limite pra 1Gi tranquilo.
             requests: {cpu: 100m, memory: 512Mi}
-            limits: {memory: 1Gi}
+            limits: {memory: 1536Mi}
       volumes:
         - name: config
           configMap:

@@ -73,6 +73,22 @@ resources:
   requests: {cpu: 100m, memory: 512Mi}
   limits: {memory: 1Gi}
 
+healthChecks:
+  # O default do chart dá 30s pro boot (periodSeconds 1 x failureThreshold 30).
+  # Com auth ligada o Phoenix roda a migration das tabelas de usuário antes de
+  # abrir a porta, e num worker de 1 vCPU isso estoura os 30s — a probe matava
+  # o pod em loop com "connection refused". 5 minutos cobre com folga.
+  startupProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    failureThreshold: 60
+  readinessProbe:
+    periodSeconds: 10
+    failureThreshold: 6
+  livenessProbe:
+    periodSeconds: 20
+    failureThreshold: 6
+
 ingress:
   # IngressRoute do Traefik no extra/, não o Ingress genérico do chart.
   enabled: false

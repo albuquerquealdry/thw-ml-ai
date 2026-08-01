@@ -15,7 +15,14 @@ spec:
   destinations:
     - server: https://kubernetes.default.svc
       namespace: ai
-  clusterResourceWhitelist: []
+  clusterResourceWhitelist:
+    # Só isto. `CreateNamespace=true` precisa criar o namespace `ai`, e Namespace
+    # é cluster-scoped — com a lista vazia o sync falha com
+    # "resource :Namespace is not permitted in project ai".
+    # Continua barrado tudo que importa: ClusterRole, ClusterRoleBinding, CRD,
+    # StorageClass, ValidatingWebhookConfiguration...
+    - group: ''
+      kind: Namespace
   namespaceResourceWhitelist:
     - group: '*'
       kind: '*'

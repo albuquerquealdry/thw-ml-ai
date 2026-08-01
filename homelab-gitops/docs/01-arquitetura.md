@@ -111,7 +111,7 @@ usa: se divergirem, o primeiro sync reverte a instalação.
 `platform` pode criar qualquer coisa, inclusive CRDs e ClusterRoles — é o que
 os charts de plataforma precisam.
 
-`ai` tem `clusterResourceWhitelist: []` e destino travado no namespace `ai`.
+`ai` só pode criar o próprio namespace (`clusterResourceWhitelist` com Namespace e mais nada) e tem destino travado no namespace `ai`.
 Se um chart de LLM um dia trouxer um ClusterRoleBinding, o sync **falha** em vez
 de aplicar silenciosamente. Isso é a fronteira valendo dinheiro: workload de IA
 executa código e prompt de terceiros, e não tem motivo pra tocar em nada

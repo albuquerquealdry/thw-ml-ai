@@ -1,0 +1,30 @@
+---
+# O ESO é o único componente do cluster autorizado a falar com o OpenBao.
+# Nenhum segredo em claro entra neste repositório — o que entra é a *referência*.
+
+installCRDs: true
+
+# Um único operator dá conta de um homelab; 2 réplicas só gastariam RAM.
+replicaCount: 1
+leaderElect: false
+
+resources:
+  requests: {cpu: 20m, memory: 96Mi}
+  limits: {memory: 192Mi}
+
+webhook:
+  replicaCount: 1
+  resources:
+    requests: {cpu: 10m, memory: 64Mi}
+    limits: {memory: 128Mi}
+
+certController:
+  replicaCount: 1
+  resources:
+    requests: {cpu: 10m, memory: 64Mi}
+    limits: {memory: 128Mi}
+
+serviceMonitor:
+  # Habilitado depois que o kube-prometheus-stack instalar o CRD ServiceMonitor.
+  # Deixe false no primeiro bootstrap; ligue no segundo commit.
+  enabled: false

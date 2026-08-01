@@ -1,0 +1,81 @@
+---
+# Coletor de logs. Substitui o Promtail, que está em EOL desde 2025.
+#
+# Optamos por `loki.source.kubernetes` (lê logs pela API do Kubernetes) em vez de
+# `loki.source.file` + hostPath. Custa um pouco mais de chamada à API, mas evita
+# montar /var/log do nó e sobrevive a mudanças de container runtime.
+
+controller:
+  type: daemonset
+
+rbac:
+  create: true
+
+alloy:
+  # Sem UI exposta; o /-/ready continua respondendo pro probe.
+  resources:
+    requests: {cpu: 25m, memory: 128Mi}
+    limits: {memory: 256Mi}
+
+  configMap:
+    create: true
+    content: |
+      logging {
+        level  = "info"
+        format = "logfmt"
+      }
+
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      // Só coleta pods do nó local — cada DaemonSet cuida do seu.
+      // Sem isto, os 4 Alloys coletariam os mesmos logs 4 vezes.
+      discovery.relabel "local_pods" {
+        targets = discovery.kubernetes.pods.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          regex         = sys.env("HOSTNAME_NODE")
+          action        = "keep"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+          target_label  = "app"
+        }
+      }
+
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.local_pods.output
+        forward_to = [loki.write.default.receiver]
+      }
+
+      loki.write "default" {
+        endpoint {
+          url = "http://loki.observability.svc.cluster.local:3100/loki/api/v1/push"
+        }
+      }
+
+  # HOSTNAME_NODE alimenta o filtro de nó lá em cima.
+  extraEnv:
+    - name: HOSTNAME_NODE
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+
+serviceMonitor:
+  # Ligue depois que o CRD ServiceMonitor existir (kube-prometheus-stack).
+  enabled: false

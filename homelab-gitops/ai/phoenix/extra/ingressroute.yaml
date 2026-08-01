@@ -1,0 +1,16 @@
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: phoenix
+  namespace: ai
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`phoenix.10.0.0.180.nip.io`)
+      kind: Rule
+      services:
+        # O chart nomeia o Service como <fullname>-svc.
+        - name: phoenix-svc
+          port: 6006

@@ -1,0 +1,5 @@
+---
+name: litellm
+namespace: ai
+project: ai
+syncWave: "20"

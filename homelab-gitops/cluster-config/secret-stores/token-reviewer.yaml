@@ -1,0 +1,39 @@
+---
+# Metade da ponte entre cluster e OpenBao.
+#
+# O fluxo de auth é: o ESO manda o token da própria ServiceAccount pro OpenBao;
+# o OpenBao precisa validar esse token contra a API do Kubernetes, e pra isso
+# ele usa as credenciais DESTA ServiceAccount (o "token reviewer").
+#
+# O token gerado aqui é o que você copia pro `bao write auth/kubernetes/config`.
+# Ver docs/03-openbao-no-proxmox.md.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openbao-token-reviewer
+  namespace: external-secrets
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: openbao-token-reviewer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  # Permissão mínima e exata: criar TokenReview. Nada além disso.
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: openbao-token-reviewer
+    namespace: external-secrets
+---
+# A partir do Kubernetes 1.24 ServiceAccounts não geram mais Secret automático.
+# Este Secret é preenchido pelo control plane; nasce vazio no Git de propósito.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: openbao-token-reviewer
+  namespace: external-secrets
+  annotations:
+    kubernetes.io/service-account.name: openbao-token-reviewer
+type: kubernetes.io/service-account-token

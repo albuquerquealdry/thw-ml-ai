@@ -1,0 +1,9 @@
+---
+name: argocd
+namespace: argocd
+project: platform
+syncWave: "-20"
+chart:
+  repo: https://argoproj.github.io/argo-helm
+  name: argo-cd
+  version: 10.2.2

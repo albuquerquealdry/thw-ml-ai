@@ -1,0 +1,21 @@
+---
+# Camada de workloads de IA. Deliberadamente restrita: só pode criar recursos
+# dentro dos seus namespaces e não pode tocar em nada cluster-scoped.
+# Se o litellm.yaml um dia vier com um ClusterRoleBinding, o sync falha — e é isso que queremos.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: ai
+  namespace: argocd
+spec:
+  description: Workloads de IA/LLM (Phoenix, LiteLLM)
+  sourceRepos:
+    - https://github.com/albuquerquealdry/thw-ml-ai.git
+    - registry-1.docker.io/arizephoenix
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: ai
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'

@@ -1,0 +1,66 @@
+---
+# ApplicationSet dos apps que são manifests próprios (Kustomize), sem chart upstream.
+#
+# Contrato: qualquer diretório com um `manifests.yaml` vira um Application.
+#
+#   <camada>/<app>/
+#     manifests.yaml      <- metadados lidos aqui
+#     kustomization.yaml  <- o que de fato é aplicado
+#     *.yaml
+#
+# Marcador diferente do `release.yaml` de propósito: ao abrir um diretório você
+# sabe pelo nome do arquivo se aquilo é chart upstream ou manifest nosso.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: kustomize
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    - git:
+        repoURL: https://github.com/albuquerquealdry/thw-ml-ai.git
+        revision: main
+        files:
+          - path: homelab-gitops/cluster-config/*/manifests.yaml
+          - path: homelab-gitops/ai/*/manifests.yaml
+  template:
+    metadata:
+      name: '{{ .name }}'
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{ .syncWave }}'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: '{{ .project }}'
+      source:
+        repoURL: https://github.com/albuquerquealdry/thw-ml-ai.git
+        targetRevision: main
+        path: '{{ .path.path }}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{ .namespace }}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+        retry:
+          limit: 10
+          backoff:
+            duration: 15s
+            factor: 2
+            maxDuration: 5m
+      revisionHistoryLimit: 3
+      ignoreDifferences:
+        # O control plane preenche este Secret depois que ele é criado.
+        # Ele nasce vazio no Git — comparar .data daria drift permanente.
+        - group: ""
+          kind: Secret
+          name: openbao-token-reviewer
+          jsonPointers:
+            - /data

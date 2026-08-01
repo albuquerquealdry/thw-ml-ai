@@ -1,0 +1,85 @@
+---
+# O chart do Loki tem default SimpleScalable + S3, que em homelab significa
+# 6+ pods e um MinIO. Aqui é SingleBinary + filesystem: 1 pod, 1 PVC.
+
+fullnameOverride: loki
+
+deploymentMode: SingleBinary
+
+loki:
+  # Sem multi-tenancy: o Grafana não precisa mandar header X-Scope-OrgID.
+  auth_enabled: false
+
+  commonConfig:
+    # Obrigatório baixar pra 1 — com o default 3 e um único ingester,
+    # todo write falha com "at least 3 live replicas required".
+    replication_factor: 1
+
+  storage:
+    type: filesystem
+
+  # O chart 6.x+ exige schemaConfig explícito; sem isso o pod sobe e morre.
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+
+  limits_config:
+    retention_period: 168h  # 7 dias, alinhado com o Prometheus
+    ingestion_rate_mb: 8
+    ingestion_burst_size_mb: 16
+    volume_enabled: true
+
+  compactor:
+    # Sem isso o retention_period acima é decorativo: nada é apagado.
+    retention_enabled: true
+    delete_request_store: filesystem
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    storageClass: local-path
+    size: 10Gi
+  resources:
+    requests: {cpu: 50m, memory: 384Mi}
+    limits: {memory: 768Mi}
+
+# --- Tudo abaixo é o modo microservices, que não usamos --------------------
+backend: {replicas: 0}
+read: {replicas: 0}
+write: {replicas: 0}
+ingester: {replicas: 0}
+querier: {replicas: 0}
+queryFrontend: {replicas: 0}
+queryScheduler: {replicas: 0}
+distributor: {replicas: 0}
+compactor: {replicas: 0}
+indexGateway: {replicas: 0}
+bloomPlanner: {replicas: 0}
+bloomBuilder: {replicas: 0}
+bloomGateway: {replicas: 0}
+
+# nginx na frente de um único pod não agrega nada aqui.
+gateway:
+  enabled: false
+
+# Caches são memcached; em 2GB de RAM por nó não compensam.
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+
+# Canary e testes geram pod extra permanente.
+lokiCanary:
+  enabled: false
+test:
+  enabled: false
+
+minio:
+  enabled: false

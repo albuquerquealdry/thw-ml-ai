@@ -1,0 +1,11 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Tudo aqui é aplicado pelo Application `root`.
+# Só entram AppProjects e ApplicationSets — nunca workload.
+resources:
+  - projects/platform.yaml
+  - projects/ai.yaml
+  - sets/helm.yaml
+  - sets/kustomize.yaml

@@ -1,0 +1,9 @@
+---
+name: external-secrets
+namespace: external-secrets
+project: platform
+syncWave: "-10"
+chart:
+  repo: https://charts.external-secrets.io
+  name: external-secrets
+  version: 2.8.0

@@ -1,0 +1,19 @@
+# Nenhum segredo deve entrar aqui — este repo guarda referências, não valores.
+# As linhas abaixo são rede de segurança, não a política.
+*.key
+*.pem
+*.p12
+*.pfx
+tls.crt
+tls.key
+kubeconfig
+*.jwt
+.env
+.env.*
+
+# Saída de `bao operator init` — se um dia cair no diretório por engano
+unseal*.txt
+root-token*
+
+.DS_Store
+*.swp

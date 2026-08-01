@@ -1,0 +1,9 @@
+---
+name: loki
+namespace: observability
+project: platform
+syncWave: "0"
+chart:
+  repo: https://grafana.github.io/helm-charts
+  name: loki
+  version: 7.2.0

@@ -1,0 +1,55 @@
+---
+# Phoenix (Arize) — observabilidade de LLM: traces OTLP, evals, playground.
+# Recebe os traces do LiteLLM (ver ai/litellm/configmap.yaml).
+
+# --- Banco -------------------------------------------------------------------
+# O chart empacota um Postgres (groundhog2k) e também sabe usar SQLite.
+# Nenhum dos dois: usamos o Postgres que já existe no Proxmox.
+postgresql:
+  enabled: false
+persistence:
+  enabled: false
+
+database:
+  defaultRetentionPolicyDays: 30
+  postgres:
+    # >>> AJUSTE: host do Postgres no Proxmox.
+    host: "10.0.0.40"
+    port: 5432
+    db: "phoenix"
+    user: "phoenix"
+    # A senha NÃO vem daqui — vem do Secret criado pelo ESO, injetada
+    # abaixo em auth.secret[].valueFrom. Deixar em branco é intencional:
+    # este campo vira ConfigMap em texto puro se preenchido.
+    password: ""
+
+auth:
+  # LAN-only. Phoenix fica atrás do Traefik na rede interna e o LiteLLM
+  # manda traces sem credencial. Para expor pra fora, ligue isto e crie
+  # uma system API key pro LiteLLM usar no header OTLP.
+  enableAuth: false
+  name: phoenix-secret
+  # O Secret é do ESO, não do chart.
+  createSecret: false
+  secret:
+    - key: PHOENIX_POSTGRES_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: phoenix-db
+          key: password
+
+service:
+  # O chart usa NodePort por padrão; com Traefik na frente não precisa.
+  type: ClusterIP
+
+server:
+  port: 6006       # UI + OTLP/HTTP
+  grpcPort: 4317   # OTLP/gRPC
+
+resources:
+  requests: {cpu: 100m, memory: 512Mi}
+  limits: {memory: 1Gi}
+
+ingress:
+  # IngressRoute do Traefik no extra/, não o Ingress genérico do chart.
+  enabled: false

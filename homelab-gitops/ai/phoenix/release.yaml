@@ -1,0 +1,12 @@
+---
+name: phoenix
+namespace: ai
+project: ai
+syncWave: "20"
+chart:
+  # Chart OCI publicado no Docker Hub. Precisa estar declarado em
+  # platform/argocd/values.yaml (configs.repositories) — repositórios OCI,
+  # ao contrário dos HTTPS, não funcionam sem registro no Argo CD.
+  repo: registry-1.docker.io/arizephoenix
+  name: phoenix-helm
+  version: 11.0.10

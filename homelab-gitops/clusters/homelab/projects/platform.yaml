@@ -1,0 +1,25 @@
+---
+# Camada de plataforma: pode mexer em recursos cluster-scoped (CRDs, RBAC,
+# StorageClass). É o project mais privilegiado — mantenha poucos apps aqui.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  description: Componentes de plataforma (Argo CD, ESO, observabilidade)
+  sourceRepos:
+    - https://github.com/albuquerquealdry/thw-ml-ai.git
+    - https://argoproj.github.io/argo-helm
+    - https://charts.external-secrets.io
+    - https://prometheus-community.github.io/helm-charts
+    - https://grafana.github.io/helm-charts
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: '*'
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'

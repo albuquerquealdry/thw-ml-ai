@@ -1,0 +1,6 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Nada extra aqui. O ClusterSecretStore que aponta pro OpenBao vive em
+# cluster-config/secret-stores/, porque é configuração do cluster e não do chart.
+resources: []

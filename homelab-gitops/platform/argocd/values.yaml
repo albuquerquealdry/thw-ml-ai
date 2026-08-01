@@ -1,0 +1,88 @@
+---
+# ATENÇÃO: este é o MESMO arquivo usado no `helm install` do bootstrap.
+# Se você instalar o Argo CD com outros values e depois deixar ele se
+# auto-gerenciar por aqui, o primeiro sync vai reverter tudo. Use sempre este.
+
+global:
+  domain: argocd.10.0.0.180.nip.io
+
+crds:
+  # O chart instala os CRDs; sem isso o Argo não consegue se auto-gerenciar.
+  install: true
+  keep: true
+
+configs:
+  params:
+    # TLS termina no Traefik. Sem isso o Argo redireciona 80->443 e o
+    # IngressRoute entra em loop de redirect.
+    server.insecure: true
+    # Homelab: 1 worker por controller já dá conta e economiza RAM.
+    controller.status.processors: 4
+    controller.operation.processors: 2
+    reposerver.parallelism.limit: 2
+
+  cm:
+    timeout.reconciliation: 180s
+    # Um ExternalSecret só é "saudável" quando o ESO conseguiu ler do OpenBao.
+    # Sem isso o Argo marca o app como Healthy mesmo com o segredo faltando.
+    resource.customizations.health.external-secrets.io_ExternalSecret: |
+      hs = {}
+      if obj.status ~= nil and obj.status.conditions ~= nil then
+        for _, c in ipairs(obj.status.conditions) do
+          if c.type == "Ready" and c.status == "True" then
+            hs.status = "Healthy"
+            hs.message = c.message
+            return hs
+          end
+          if c.type == "Ready" and c.status == "False" then
+            hs.status = "Degraded"
+            hs.message = c.message
+            return hs
+          end
+        end
+      end
+      hs.status = "Progressing"
+      hs.message = "Aguardando o ESO materializar o Secret"
+      return hs
+
+  repositories:
+    # Repositórios Helm via HTTPS funcionam anonimamente sem registro.
+    # OCI, não: precisa estar declarado aqui para o repo-server aceitar.
+    arizephoenix:
+      name: arizephoenix
+      type: helm
+      url: registry-1.docker.io/arizephoenix
+      enableOCI: "true"
+
+# Dex e notifications ficam de fora: RAM em homelab é o recurso escasso.
+dex:
+  enabled: false
+notifications:
+  enabled: false
+
+controller:
+  resources:
+    requests: {cpu: 100m, memory: 512Mi}
+    limits: {memory: 1Gi}
+
+repoServer:
+  resources:
+    requests: {cpu: 50m, memory: 256Mi}
+    limits: {memory: 768Mi}
+
+server:
+  service:
+    type: ClusterIP
+  resources:
+    requests: {cpu: 25m, memory: 128Mi}
+    limits: {memory: 256Mi}
+
+applicationSet:
+  resources:
+    requests: {cpu: 25m, memory: 96Mi}
+    limits: {memory: 256Mi}
+
+redis:
+  resources:
+    requests: {cpu: 25m, memory: 64Mi}
+    limits: {memory: 128Mi}

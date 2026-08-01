@@ -1,0 +1,51 @@
+---
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  render:
+    name: Renderiza e valida o contrato
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependências
+        run: pip install --quiet pyyaml
+
+      - name: Renderiza todos os overlays Kustomize
+        # Pega erro de sintaxe e referência quebrada antes do Argo CD
+        # descobrir em produção.
+        run: make lint
+
+      - name: Confere o contrato dos diretórios de app
+        # Um release.yaml sem values.yaml ou sem extra/ quebra o
+        # ApplicationSet em runtime; aqui quebra o PR.
+        run: make contract
+
+  secrets:
+    name: Varre por segredo vazado
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Nenhum Secret com dados literais
+        # ExternalSecret é permitido; `kind: Secret` com stringData/data
+        # neste repo significa que alguém colou um valor.
+        run: |
+          if grep -rn --include='*.yaml' -B5 -E '^\s*(stringData|data):' . \
+             | grep -q 'kind: Secret'; then
+            echo "Secret com dados literais encontrado — use ExternalSecret."
+            exit 1
+          fi
+          echo "ok"

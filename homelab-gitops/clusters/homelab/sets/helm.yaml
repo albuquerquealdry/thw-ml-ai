@@ -1,0 +1,87 @@
+---
+# ApplicationSet dos apps baseados em Helm chart upstream.
+#
+# Contrato: qualquer diretório que contenha um `release.yaml` vira um Application.
+# O diretório precisa ter exatamente esta forma:
+#
+#   <camada>/<app>/
+#     release.yaml            <- metadados lidos aqui (chart, ns, project)
+#     values.yaml             <- values do chart, versionado
+#     extra/kustomization.yaml <- recursos extras (ExternalSecret, IngressRoute, ...)
+#                                 pode ficar vazio, mas precisa existir
+#
+# Três sources por Application, e é de propósito:
+#   1. o chart upstream (nunca é forkado)
+#   2. este repo como `ref: values`, para o $values/... dos valueFiles
+#   3. este repo em <app>/extra, para os manifests que acompanham o chart
+# Assim `values.yaml` fica em Git ao lado do que ele configura, sem vendorizar chart.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: helm
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    - git:
+        repoURL: https://github.com/albuquerquealdry/thw-ml-ai.git
+        revision: main
+        files:
+          - path: homelab-gitops/platform/*/release.yaml
+          - path: homelab-gitops/ai/*/release.yaml
+  template:
+    metadata:
+      name: '{{ .name }}'
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{ .syncWave }}'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: '{{ .project }}'
+      sources:
+        - repoURL: '{{ .chart.repo }}'
+          chart: '{{ .chart.name }}'
+          targetRevision: '{{ .chart.version }}'
+          helm:
+            releaseName: '{{ .name }}'
+            valueFiles:
+              - $values/{{ .path.path }}/values.yaml
+        - repoURL: https://github.com/albuquerquealdry/thw-ml-ai.git
+          targetRevision: main
+          ref: values
+        - repoURL: https://github.com/albuquerquealdry/thw-ml-ai.git
+          targetRevision: main
+          path: '{{ .path.path }}/extra'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{ .namespace }}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          # ServerSideApply é obrigatório aqui: os CRDs do kube-prometheus-stack
+          # estouram o limite de 262kB da annotation last-applied-configuration.
+          - ServerSideApply=true
+        # A ordenação real entre apps vem daqui, não das sync-waves: um app que
+        # depende de um CRD ainda inexistente falha, faz backoff e converge sozinho.
+        retry:
+          limit: 10
+          backoff:
+            duration: 15s
+            factor: 2
+            maxDuration: 5m
+      revisionHistoryLimit: 3
+      ignoreDifferences:
+        # caBundle é injetado por webhooks no cluster; não é drift.
+        - group: admissionregistration.k8s.io
+          kind: ValidatingWebhookConfiguration
+          jqPathExpressions:
+            - .webhooks[]?.clientConfig.caBundle
+        - group: admissionregistration.k8s.io
+          kind: MutatingWebhookConfiguration
+          jqPathExpressions:
+            - .webhooks[]?.clientConfig.caBundle

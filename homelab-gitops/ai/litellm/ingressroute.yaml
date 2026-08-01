@@ -1,0 +1,15 @@
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: litellm
+  namespace: ai
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`llm.10.0.0.180.nip.io`)
+      kind: Rule
+      services:
+        - name: litellm
+          port: 4000

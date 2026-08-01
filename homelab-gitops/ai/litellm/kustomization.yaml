@@ -1,0 +1,35 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ai
+
+# Por que manifests em vez do chart oficial:
+#
+#   1. O chart mais recente PUBLICADO como OCI é o 0.1.100 (abril/2024) —
+#      o app está em v1.9x. O chart 1.1.1 existe no repo do LiteLLM mas
+#      nunca foi publicado num registry.
+#   2. Esse chart gera o master key com `randAlphaNum` a cada render. No Argo CD
+#      isso significa OutOfSync permanente e a chave mudando a cada sync.
+#   3. Ele depende dos charts postgresql/redis da Bitnami, cujas imagens
+#      públicas deixaram de ser publicadas.
+#
+# LiteLLM é um proxy stateless. 4 objetos resolvem, e ficam sob nosso controle.
+resources:
+  - externalsecret.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingressroute.yaml
+
+configMapGenerator:
+  # O gerador anexa um hash do conteúdo ao nome (litellm-config-7t2k9...) e
+  # reescreve a referência no Deployment. Editar o config.yaml muda o nome,
+  # muda o pod spec, e o rollout acontece. É isso que uma annotation
+  # `checksum/config` escrita à mão tenta imitar — aqui vem de graça.
+  - name: litellm-config
+    files:
+      - config.yaml
+
+generatorOptions:
+  # Sem o sufixo `disableNameSuffixHash` — o hash é justamente o ponto.
+  labels:
+    app.kubernetes.io/name: litellm

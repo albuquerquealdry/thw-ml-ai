@@ -1,0 +1,9 @@
+---
+name: alloy
+namespace: observability
+project: platform
+syncWave: "10"
+chart:
+  repo: https://grafana.github.io/helm-charts
+  name: alloy
+  version: 1.11.0

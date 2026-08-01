@@ -1,0 +1,5 @@
+---
+name: secret-stores
+namespace: external-secrets
+project: platform
+syncWave: "-5"

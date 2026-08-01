@@ -1,0 +1,104 @@
+---
+# Perfil de homelab: 4 nós pequenos. Tudo aqui é dimensionado pra caber,
+# não pra ser "production ready". As decisões que doem estão comentadas.
+
+fullnameOverride: kps
+
+# --- Componentes que o K3s não expõe -----------------------------------------
+# O K3s roda etcd/scheduler/controller-manager dentro do processo do servidor,
+# sem as portas de métricas que estes ServiceMonitors esperam. Deixar habilitado
+# só gera target "DOWN" pra sempre e alerta falso. Este é o ajuste que quase
+# todo mundo esquece ao instalar o kube-prometheus-stack em K3s.
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+# --- Alertmanager ------------------------------------------------------------
+# Desligado: sem rota de notificação configurada ele é 100Mi de RAM parada.
+# Ligue junto com um receiver de verdade (ntfy, Discord, Gotify), não antes.
+alertmanager:
+  enabled: false
+
+prometheusOperator:
+  resources:
+    requests: {cpu: 25m, memory: 96Mi}
+    limits: {memory: 256Mi}
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    retentionSize: 6GB
+    scrapeInterval: 60s
+    evaluationInterval: 60s
+
+    # Sem isto, o operator só considera ServiceMonitors com o label do release.
+    # Em homelab você quer que qualquer chart que crie um ServiceMonitor funcione.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+
+    resources:
+      requests: {cpu: 100m, memory: 640Mi}
+      limits: {memory: 1280Mi}
+
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          # local-path é o provisioner que já vem no K3s. Grava no disco do nó,
+          # e o Prometheus fica preso ao nó onde o PVC nasceu. Aceitável em lab.
+          storageClassName: local-path
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 8Gi
+
+grafana:
+  enabled: true
+  fullnameOverride: grafana
+
+  # Senha vem do OpenBao via ESO (ver extra/externalsecret.yaml).
+  # Nunca colocar admin.password aqui.
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    size: 2Gi
+
+  resources:
+    requests: {cpu: 25m, memory: 128Mi}
+    limits: {memory: 320Mi}
+
+  # Ingress fica no extra/ como IngressRoute do Traefik — o chart usa Ingress
+  # genérico e a gente prefere o CRD nativo que já vem no K3s.
+  ingress:
+    enabled: false
+
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      access: proxy
+      # Sem gateway nginx na frente: em SingleBinary o Grafana fala direto
+      # com o Loki na 3100 (ver platform/loki/values.yaml).
+      url: http://loki.observability.svc.cluster.local:3100
+      jsonData:
+        maxLines: 1000
+
+# node-exporter roda em todos os nós; mantenha barato.
+prometheus-node-exporter:
+  resources:
+    requests: {cpu: 10m, memory: 24Mi}
+    limits: {memory: 64Mi}
+
+kube-state-metrics:
+  resources:
+    requests: {cpu: 10m, memory: 64Mi}
+    limits: {memory: 128Mi}

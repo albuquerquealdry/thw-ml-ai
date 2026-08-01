@@ -48,6 +48,15 @@ spec:
               value: http://phoenix-svc.ai.svc.cluster.local:6006/v1/traces
             - name: OTEL_SERVICE_NAME
               value: litellm
+            # Precisa estar declarado aqui, e não só no envFrom: a expansão
+            # $(VAR) do Kubernetes só enxerga vars da própria lista `env`.
+            - name: PHOENIX_ADMIN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: litellm
+                  key: PHOENIX_ADMIN_SECRET
+            - name: OTEL_HEADERS
+              value: Authorization=Bearer $(PHOENIX_ADMIN_SECRET)
             - name: STORE_MODEL_IN_DB
               value: "True"
           volumeMounts:

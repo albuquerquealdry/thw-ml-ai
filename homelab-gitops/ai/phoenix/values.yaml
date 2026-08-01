@@ -24,14 +24,37 @@ database:
     password: ""
 
 auth:
-  # LAN-only. Phoenix fica atrás do Traefik na rede interna e o LiteLLM
-  # manda traces sem credencial. Para expor pra fora, ligue isto e crie
-  # uma system API key pro LiteLLM usar no header OTLP.
-  enableAuth: false
+  # Ligado. O Phoenix guarda o conteúdo dos prompts e das respostas — é o
+  # serviço com o dado mais sensível da stack, não faz sentido ser o único
+  # sem porta.
+  enableAuth: true
   name: phoenix-secret
-  # O Secret é do ESO, não do chart.
+  # Todos os valores vêm do OpenBao via ESO; o chart não gera nada.
   createSecret: false
   secret:
+    # Chave de criptografia do Phoenix. Trocar depois invalida o que já
+    # foi cifrado com ela — defina uma vez.
+    - key: PHOENIX_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: phoenix-db
+          key: phoenix-secret
+
+    # Chave de sistema: autentica chamadas de API/OTLP sem precisar criar
+    # API key pela UI. É com ela que o LiteLLM manda os traces.
+    - key: PHOENIX_ADMIN_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: phoenix-db
+          key: admin-secret
+
+    # Senha do admin no primeiro login. Troque pela UI depois.
+    - key: PHOENIX_DEFAULT_ADMIN_INITIAL_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: phoenix-db
+          key: admin-initial-password
+
     - key: PHOENIX_POSTGRES_PASSWORD
       valueFrom:
         secretKeyRef:

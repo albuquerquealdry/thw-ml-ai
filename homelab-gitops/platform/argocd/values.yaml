@@ -53,6 +53,13 @@ configs:
       type: helm
       url: registry-1.docker.io/arizephoenix
       enableOCI: "true"
+    # Charts nossos. O pacote é público no GHCR, então o repo-server puxa
+    # anonimamente — não há credencial aqui de propósito.
+    ghcr-charts:
+      name: ghcr-charts
+      type: helm
+      url: ghcr.io/albuquerquealdry/charts
+      enableOCI: "true"
 
 # Dex e notifications ficam de fora: RAM em homelab é o recurso escasso.
 dex:

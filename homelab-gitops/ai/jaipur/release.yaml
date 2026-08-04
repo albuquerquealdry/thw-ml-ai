@@ -1,0 +1,12 @@
+---
+name: jaipur
+namespace: ai
+project: ai
+syncWave: "20"
+chart:
+  # Chart OCI publicado pelo próprio repo do Jaipur (workflow `release`, por tag).
+  # Precisa estar declarado em platform/argocd/values.yaml (configs.repositories) —
+  # repositórios OCI, ao contrário dos HTTPS, não funcionam sem registro no Argo CD.
+  repo: ghcr.io/albuquerquealdry/charts
+  name: jaipur
+  version: 0.1.0

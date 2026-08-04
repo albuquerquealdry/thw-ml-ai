@@ -1,0 +1,55 @@
+---
+# Jaipur — registry de agentes A2A.
+#
+# O chart sabe subir um Postgres próprio; não usamos. O Postgres do Proxmox
+# (LXC 105, 10.0.0.40) já existe e é onde phoenix e litellm também moram.
+postgresql:
+  enabled: false
+
+# Nenhuma senha aqui. Tudo vem do Secret `jaipur` que o ESO materializa a partir
+# do OpenBao — ver extra/externalsecret.yaml.
+database:
+  existingSecret: jaipur
+  existingSecretKey: databaseUrl
+
+admin:
+  existingSecret: jaipur
+
+# Fixada de propósito, em vez de deixar o app gerar.
+#
+# Sem isso o Jaipur gera uma chave no primeiro boot e guarda no Postgres — o que
+# sobrevive a restart, mas não a recriar o banco. Como o banco mora fora do
+# cluster e pode ser restaurado de backup a qualquer momento, a chave precisa ser
+# a mesma dos dois lados, senão toda assinatura já entregue deixa de verificar.
+signingKey:
+  existingSecret: jaipur
+
+config:
+  baseURL: "http://jaipur.10.0.0.180.nip.io"
+  # Os agentes deste homelab moram em 10.0.0.0/24. Sem isto, publicar apontando
+  # para um card na rede interna é recusado.
+  #
+  # A contrapartida é real: quem tiver token de publish consegue fazer este pod
+  # buscar qualquer URL interna. Aceitável porque o registry não está exposto
+  # para fora da LAN — se um dia estiver, isto volta para false.
+  allowPrivateCards: true
+  # O Traefik aqui serve só `web`, sem TLS.
+  secureCookies: false
+
+# A exposição vem do IngressRoute em extra/, como nos outros apps desta camada.
+ingress:
+  enabled: false
+
+service:
+  type: ClusterIP
+  port: 80
+
+# Um pod basta: todo o estado vive no Postgres.
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 64Mi
+  limits:
+    memory: 256Mi

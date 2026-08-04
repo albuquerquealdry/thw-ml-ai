@@ -8,10 +8,12 @@ metadata:
   name: ai
   namespace: argocd
 spec:
-  description: Workloads de IA/LLM (Phoenix, LiteLLM)
+  description: Workloads de IA/LLM (Phoenix, LiteLLM, Jaipur)
   sourceRepos:
     - https://github.com/albuquerquealdry/thw-ml-ai.git
     - registry-1.docker.io/arizephoenix
+    # Charts próprios, publicados como OCI pelo repo que os versiona.
+    - ghcr.io/albuquerquealdry/charts
   destinations:
     - server: https://kubernetes.default.svc
       namespace: ai

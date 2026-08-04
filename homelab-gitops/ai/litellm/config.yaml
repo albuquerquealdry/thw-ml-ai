@@ -19,6 +19,41 @@ model_list:
       model: openai/gpt-4o
       api_key: os.environ/OPENAI_API_KEY
 
+  # --- LM Studio (local, no Mac 10.0.0.150) ---------------------------
+  # Modelos servidos pelo LM Studio na máquina do Leona. Custo zero por token
+  # e o prompt não sai da LAN — bom pra teste, carga alta e dado sensível.
+  #
+  # Dependência frágil de propósito: se o Mac desligar ou o LM Studio fechar,
+  # estes modelos somem. O `num_retries` do router não ajuda aqui, então não
+  # aponte nada crítico pra eles.
+  #
+  # api_key é exigido pelo protocolo mas o LM Studio ignora o valor.
+  - model_name: local-r1
+    litellm_params:
+      model: lm_studio/deepseek/deepseek-r1-0528-qwen3-8b
+      api_base: http://10.0.0.150:1234/v1
+      api_key: "lm-studio"
+  - model_name: local-coder
+    litellm_params:
+      model: lm_studio/qwen2.5-coder-7b-instruct-mlx
+      api_base: http://10.0.0.150:1234/v1
+      api_key: "lm-studio"
+  - model_name: local-vision
+    litellm_params:
+      model: lm_studio/qwen/qwen2.5-vl-7b
+      api_base: http://10.0.0.150:1234/v1
+      api_key: "lm-studio"
+  - model_name: local
+    litellm_params:
+      model: lm_studio/qwen2.5-7b-instruct-1m
+      api_base: http://10.0.0.150:1234/v1
+      api_key: "lm-studio"
+  - model_name: local-embed
+    litellm_params:
+      model: lm_studio/text-embedding-nomic-embed-text-v1.5
+      api_base: http://10.0.0.150:1234/v1
+      api_key: "lm-studio"
+
 litellm_settings:
   # É isto que faz cada chamada virar um trace no Phoenix.
   callbacks: ["otel"]
